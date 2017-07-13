@@ -2,7 +2,7 @@
 
 > **Difficulty**: Medium
 
-> **Time**: Approximately 25 minutes
+> **Time**: Approximately 40 minutes
 
 Sysdig Falco is an open source, behavioral activity monitor designed to detect anomalous activity. Suitable for deploying intrusion detection over any generic Linux host, it is particularly useful for Docker hosting nodes, since it supports container-specific context like **container.id** or **namespaces** for its rules. 
 
@@ -10,7 +10,7 @@ In this lab you will learn the basics of Sysdig Falco and how to use it with Doc
 
 You will experiment with the following security threats as part of this lab.
 
-- [Container running a shell](#shell)
+- [Container running an interactive shell](#shell)
 - [Unauthorized process](#process)
 - [Unauthorized port open](#port)
 - [Unauthorized remote host connection](#remote)
@@ -87,7 +87,7 @@ Edit the *falco.yaml* file and modify the `file_output` section:
    ```
    file_output:
      enabled: true
-     filename: ./falco_events.txt
+     filename: /var/log/falco_events.txt
    ```
 If you have not already, clone the lab and `cd` into the lab's `examplefiles` directory.
 
@@ -98,7 +98,72 @@ If you have not already, clone the lab and `cd` into the lab's `examplefiles` di
 
 There you will find the complete `falco.yaml` file and a (solution) `falco_rules.yaml` file.
 
+Reload the Falco daemon every time that you change the configuration files
 
+   ```
+   # systemctl restart falco
+   ```
+
+# <a name="shell"></a> Container running an interactive shell
+
+Let's start with an easy one, detecting an attacker running an interactive shell in any of our containers. This alert is included
+in the default rule set. Let's trigger it first and then you can dissect the rule itself.
+
+Run any container on your Docker host, for example `nginx`:
+   ```
+   # docker run -d -P --name example1 nginx
+ 
+   # docker ps
+   CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS                   NAMES
+   604aa46610dd        nginx               "nginx -g 'daemon ..."   2 minutes ago       Up 2 minutes        0.0.0.0:32771->80/tcp   example1
+   ```
+
+Now spawn an interactive shell 
+
+   ```
+   # docker exec -it example1 bash
+   ```
+
+Tailing the `/var/log/falco_events.txt` you will be able to read:
+
+   ```
+   17:13:24.357351845: Notice A shell was spawned in a container with an attached terminal (user=root example1 (id=604aa46610dd) shell=bash parent=<NA> cmdline=bash  terminal=34816)
+   ```
+
+This is the specific `/etc/falco_rules.yaml` rule that fired
+
+   ```
+   - rule: Terminal shell in container
+     desc: A shell was spawned by a program in a container with an attached terminal.
+     condition: >
+       spawned_process and container
+       and shell_procs and proc.tty != 0
+     output: "A shell was spawned in a container with an attached terminal (user=%user.name %container.info shell=%proc.name parent=%proc.pname cmdline=%proc.cmdline terminal=%proc.tty)"
+     priority: NOTICE
+     tags: [container, shell]
+   ```
+
+This is a rather complex rule, don't worry if you don't fully understand it at this moment.
+
+Notice that you can define and use macros to make your rules more readable and powerful. For example the `and container` condition above corresponds to the macro
+
+   ```
+   - macro: container
+     condition: container.id != host
+   ```
+
+This is, any container id that doesn't match the hosting node (any actual container).
+
+You can also classify different threat priorities [DEBUG, INFO, NOTICE, WARNING, ERROR]
+
+Note as well that the output can be completed with the context variables provided by Falco like `%proc.name` or `%container.info`.
+
+For the next exercise, you will create your own custom rule from scratch.
+
+
+# Conclusions & Further reading
+
+Output to program, notification
 
 
 
