@@ -4,13 +4,11 @@
 
 > **Time**: Approximately 25 minutes
 
-Sysdig Falco 
-
 Sysdig Falco is an open source, behavioral activity monitor designed to detect anomalous activity. Suitable for deploying intrusion detection over any generic Linux host, it is particularly useful for Docker hosting nodes, since it supports container-specific context like **container.id** or **namespaces** for its rules. 
 
 In this lab you will learn the basics of Sysdig Falco and how to use it with Docker to detect anomalous container behavior.
 
-You will experiment with the following security warnings as part of this lab.
+You will experiment with the following security threats as part of this lab.
 
 - [Container running a shell](#shell)
 - [Unauthorized process](#process)
@@ -33,7 +31,7 @@ You will need all of the following to complete this lab:
 To generate this lab `Ubuntu 16.04.2 LTS` and `Docker 17.06.0-ce` were used. Any current version of the Linux kernel
 and Docker should suffice.
 
-#Falco installation and configuration
+# Falco installation and configuration
 
 Sysdig Falco can be installed as a regular package from the repositories of popular distributions like Ubuntu or RHEL, but
 there is also a convenient scripted install:
@@ -71,7 +69,7 @@ Start the falco service
    # systemctl start falco
    ```
 
-And check that the module correctly loaded
+And check that the module is correctly loaded
 
    ```
    # lsmod | grep falco
@@ -97,6 +95,10 @@ If you have not already, clone the lab and `cd` into the lab's `examplefiles` di
    $ git clone https://github.com/docker/labs.git
    $ cd labs/security/falco/examplefiles
    ```
+
+There you will find the complete `falco.yaml` file and a (solution) `falco_rules.yaml` file.
+
+
 
 
 

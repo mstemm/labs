@@ -39,7 +39,7 @@ syslog_output:
 
 file_output:
   enabled: true
-  filename: ./falco_events.txt
+  filename: /var/log/falco_events.txt
 
 stdout_output:
   enabled: true
