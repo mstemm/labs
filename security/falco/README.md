@@ -63,6 +63,40 @@ there is also a convenient scripted install:
    DKMS: install completed.
    ```
    
+You have probably noticed that the installer will pull the kernel headers, build and install a kernel module. This module is in charge of collecting Linux syscalls and other low-level events to the user-level tool, using this mechanism you don't need to modify or instrument the monitorized containers in any way.
+
+Start the falco service
+
+   ```
+   # systemctl start falco
+   ```
+
+And check that the module correctly loaded
+
+   ```
+   # lsmod | grep falco
+
+     falco_probe           442368  1
+   ```
+
+There are also two configuration files that you will need to modify: `/etc/falco.yaml` and `/etc/falco_rules.yaml`.
+As you can guess, *falco.yaml* covers the daemon configuration and *falco_rules.yaml* the threat detection patters.
+
+By default, Falco only logs to *syslog*, let's edit it to enable file output, this way the exercises will be easier to follow.
+
+
+Edit the *falco.yaml* file and modify the `file_output` section:
+   ```
+   file_output:
+     enabled: true
+     filename: ./falco_events.txt
+   ```
+If you have not already, clone the lab and `cd` into the lab's `examplefiles` directory.
+
+   ```
+   $ git clone https://github.com/docker/labs.git
+   $ cd labs/security/falco/examplefiles
+   ```
 
 
 
