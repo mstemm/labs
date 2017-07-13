@@ -154,12 +154,61 @@ Notice that you can define and use macros to make your rules more readable and p
 
 This is, any container id that doesn't match the hosting node (any actual container).
 
-You can also classify different threat priorities [DEBUG, INFO, NOTICE, WARNING, ERROR]
+You can also classify different threat priorities [DEBUG, INFO, NOTICE, WARNING, ERROR...]
 
 Note as well that the output can be completed with the context variables provided by Falco like `%proc.name` or `%container.info`.
 
 For the next exercise, you will create your own custom rule from scratch.
 
+# <a name="process"></a> Unauthorized process
+
+Docker and microservices design patterns instruct us to minimize the number of processes per container. Apart from the architectural benefits, this
+could be a huge advantage to security, because it restricts what should and should not be running on a particular container. 
+
+You know that your `nginx`containers should only be executing the `nginx` process (or a reduced set of processes in more realistic scenarios). Anything else
+should rise an alarm.
+
+Let's write the following rule into `/etc/falco_rules.yaml`
+
+   ```
+   #Our nginx containers for example1 should only be running the 'nginx' process
+   - rule: Unauthorized process on nginx containers
+     desc: There is a process in our nginx container that is not described in the template
+     condition: spawned_process and container and container.image startswith nginx and `
+     output: Unauthorized process (%proc.cmdline) running in (%container.id)
+     priority: WARNING
+   ```
+
+You have the `rule` name and `desc` for the human reader.
+The firing condition requires:
+ - `spawned_process` (default macro) 
+ - `container` (you don't want to fire this for the host)
+ - `container.image startswith nginx` (so you can have separate authorized process lists for separate containers) 
+ - `not proc.name in (nginx)` (you can write a comma separated list with the expected processes)
+
+You already know how `output` and `priority` works.
+
+Again, restart Falco, create the nginx container.
+
+   ```
+   # systemctl restart falco
+   # docker run -d -P --name example2 nginx
+   ```
+
+spawn a shell in the `example2` container and just run anything like `ls`
+
+Tailing the `/var/log/falco_events.txt` you will be able to read:
+
+   ```
+   18:38:36.911250971: Notice A shell was spawned in a container with an attached terminal (user=root example1 (id=604aa46610dd) shell=bash parent=<NA> cmdline=bash  terminal=34816)
+   18:38:43.364877988: Warning Unauthorized process (ls ) running in (604aa46610dd)
+   ```
+
+Success! The first notice entry, you were already expecting by the rule in the exercise above, second entry shows that Falco has recognized an alien process and is firing a warning.
+
+
+procps
+kill -s HUP `cat /var/run/nginx.pid`
 
 # Conclusions & Further reading
 
