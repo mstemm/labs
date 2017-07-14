@@ -13,10 +13,8 @@ You will experiment with the following security threats as part of this lab.
 - [Container running an interactive shell](#shell)
 - [Unauthorized process](#process)
 - [Unauthorized port open](#port)
-- [Unauthorized remote host connection](#remote)
 - [Write to non user-data directory](#write)
-- [Running system administration binaries](#sysadm)
-- [Process tries to access unauthorized device](#device)
+
 
 You will play both the attacker and defender (sysadmin) roles, verifying that the intrusion attempt has
 been detected by Sysdig Falco.
@@ -124,7 +122,7 @@ Now spawn an interactive shell
    # docker exec -it example1 bash
    ```
 
-Tailing the `/var/log/falco_events.txt` you will be able to read:
+Tailing the `/var/log/falco_events.txt` file you will be able to read:
 
    ```
    17:13:24.357351845: Notice A shell was spawned in a container with an attached terminal (user=root example1 (id=604aa46610dd) shell=bash parent=<NA> cmdline=bash  terminal=34816)
@@ -206,13 +204,135 @@ Tailing the `/var/log/falco_events.txt` you will be able to read:
 
 Success! The first notice entry, you were already expecting by the rule in the exercise above, second entry shows that Falco has recognized an alien process and is firing a warning.
 
+You should probably comment out this rule before proceeding to the next exercises to get a cleaner output.
 
-procps
-kill -s HUP `cat /var/run/nginx.pid`
+# <a name="port"></a> Unauthorized port
+
+Similar to the previous exercise, if your container is opening a port that does not correlate to its service template, that's
+something that should be checked.
+
+this time, you can create a macro that contains your regular port numbers, so the rules you create later are shorter and easier to read:
+
+   ```
+   - macro: nginx_ports
+     condition: fd.sport=80 or fd.sport=443 or fd.sport=8080
+
+   ```
+
+Now you write a rule that uses this macro like this:
+
+   ```
+   - rule: Unauthorized port
+     desc: Unauthorized port open on nginx container
+     condition: inbound and container and container.image startswith nginx and not nginx_ports
+     output: Unauthorized port (%fd.name) running in (%container.info)
+     priority: WARNING
+   ```
+
+Let's reload Falco and create a disposable nginx container
+
+   ```
+   # systemctl restart falco
+   # docker run -d -P --name example3 nginx
+   ```
+
+By default, the container exposes port 80, so you should receive no warning.
+
+You can now spawn a shell into the container and install a text editor (remember to comment out the rule in example2 or this will generate a lot of noise).
+
+
+   ```
+   # docker exec -it example3 bash
+   # apt update
+   # apt install vim   # or your favorite text editor
+   ```
+
+Edit the nginx configuration file
+
+   ```
+   # vim /etc/nginx/conf.d/default.conf
+   
+   ```
+
+you will see the directive `listen 80`, change it to a non authorized port, `listen 85` for example. Save the file and exit.
+
+Reload the nginx service
+
+   ```
+   # service nginx reload
+   ```
+
+If you tail the `/var/log/falco_events.txt` you will see two interesting entries:
+
+   ```
+   19:50:33.663139720: Error File below /etc opened for writing (user=root command=vim /etc/nginx/conf.d/default.conf file=/etc/nginx/conf.d/default.conf)
+   19:50:51.031989661: Warning Unauthorized port (0.0.0.0:85) running in (example3 (id=6227a98c2d0b))
+   ```
+
+First one corresponds to a default Falco rule, usually you don't want a process to write in `/etc/`, second one is your custom rule.
+
+
+# <a name="write"></a> Write to non user-data directory
+
+One of the key concepts using Docker is "immutability", usually, running containers are not supposed to be updated and the user data directories are
+perfectly delimited. Let's use this design principle as a security indicator.
+
+First, let's define a macro with the write-allowed directories:
+
+   ```
+   - macro: user_data_dir
+     condition: evt.arg[1] startswith /userdata or evt.arg[1] startswith /var/log/nginx
+   ```
+
+You may want to include `/var/log/nginx` to avoid firing an alarm when nginx updates its logs.
+
+And the rule for this exercise:
+
+   ```
+   - rule: Write to non user_data dir
+     desc: attempt to write to directories that should be immutable
+     condition: open_write and container and not user_data_dir
+     output: "Writing to non user_data dir (user=%user.name command=%proc.cmdline file=%fd.name)"
+     priority: ERROR
+
+   ```
+
+Let's take a look at the `open_write` macro:
+
+   ```
+   - macro: open_write
+   condition: (evt.type=open or evt.type=openat) and evt.is_open_write=true and fd.typechar='f'
+   ```
+
+Just as a reminder that at its core, Falco works doing a live capture of system calls like `open` or `openat`.
+
+Now, you can spawn a new container and try this rule:
+
+   ```
+   # systemctl restart falco
+   # docker run -d -P --name example4 nginx
+   # docker exec -it example4 bash
+   # mkdir /userdata
+   # touch /userdata/foo   # Shouldn't trigger this rule
+   # touch /usr/foo 
+   ```
+
+Again, two relevant log lines:
+
+   ```
+   21:15:01.998703651: Error Writing to non user_data dir (user=root command=bash  file=/dev/tty)
+   21:15:58.476945006: Error Writing to non user_data dir (user=root command=touch /usr/foo file=/usr/foo)
+
+   ```
+
+Your shell wrote to `/dev/tty`, and the non allowed file write to `/usr`.
+
 
 # Conclusions & Further reading
 
 Output to program, notification
+- [Process tries to access unauthorized device](#device)
+- [Running system administration binaries](#sysadm)
 
 
 
