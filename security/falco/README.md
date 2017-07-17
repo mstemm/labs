@@ -4,11 +4,11 @@
 
 > **Time**: Approximately 40 minutes
 
-Sysdig Falco is an open source, behavioral activity monitor designed to detect anomalous activity. Suitable for deploying intrusion detection over any generic Linux host, it is particularly useful for Docker hosting nodes, since it supports container-specific context like **container.id** or **namespaces** for its rules. 
+Sysdig Falco is an open source, behavioral monitor designed to detect anomalous activity. Suitable for deploying intrusion detection targeting any generic Linux host, it is particularly useful for Docker hosting nodes since it supports container-specific context like **container.id** or **namespaces** for its rules. 
 
-In this lab you will learn the basics of Sysdig Falco and how to use it with Docker to detect anomalous container behavior.
+In this lab you will learn the basics of Sysdig Falco and how to use it along with Docker to detect anomalous container behavior.
 
-You will experiment with the following security threats as part of this lab.
+You will simulate the following security threats as part of this lab:
 
 - [Container running an interactive shell](#shell)
 - [Unauthorized process](#process)
@@ -59,9 +59,19 @@ there is also a convenient scripted install:
    DKMS: install completed.
    ```
    
-You have probably noticed that the installer will pull the kernel headers, build and install a kernel module. This module is in charge of collecting Linux syscalls and other low-level events to the user-level tool, using this mechanism you don't need to modify or instrument the monitorized containers in any way.
+You have probably noticed that the installer will pull the kernel headers, build and install a kernel module. This module is in charge of collecting Linux syscalls and other low-level events to the user-level tool, using this mechanism you don't need to modify or instrument the monitored containers in any way.
 
-Start the falco service
+You can also install Falco as a container itself!
+
+   ```
+   docker pull sysdig/falco
+   docker run -i -t --name falco --privileged -v /var/run/docker.sock:/host/var/run/docker.sock -v /dev:/host/dev -v /proc:/host/proc:ro -v /boot:/host/boot:ro -v /lib/modules:/host/lib/modules:ro -v /usr:/host/usr:ro sysdig/falco
+   ```
+
+This privileged container will build and inject the kernel module, assuming that Linux kernel headers are installed and available under `lib/modules`.
+If you choose the scripted install, the Falco configuration and service reloads will be executed from the Docker host, if you prefer the Docker container, you will need to login and launch from there.
+
+Start the Falco service
 
    ```
    # systemctl start falco
@@ -82,11 +92,13 @@ By default, Falco only logs to *syslog*, let's edit it to enable file output, th
 
 
 Edit the *falco.yaml* file and modify the `file_output` section:
+
    ```
    file_output:
      enabled: true
      filename: /var/log/falco_events.txt
    ```
+
 If you have not already, clone the lab and `cd` into the lab's `examplefiles` directory.
 
    ```
@@ -108,6 +120,7 @@ Let's start with an easy one, detecting an attacker running an interactive shell
 in the default rule set. Let's trigger it first and then you can dissect the rule itself.
 
 Run any container on your Docker host, for example `nginx`:
+
    ```
    # docker run -d -P --name example1 nginx
  
@@ -240,7 +253,6 @@ By default, the container exposes port 80, so you should receive no warning.
 
 You can now spawn a shell into the container and install a text editor (remember to comment out the rule in example2 or this will generate a lot of noise).
 
-
    ```
    # docker exec -it example3 bash
    # apt update
@@ -346,4 +358,4 @@ Further reading:
 - [Sysdig Falco documentation](https://github.com/draios/falco/wiki)
 - Blogpost [SELinux, Seccomp, Sysdig Falco, and you: A technical discussion](https://sysdig.com/blog/selinux-seccomp-falco-technical-discussion/)
 - Demo video [Sysdig Falco - Man in the middle attack detection](https://www.youtube.com/watch?v=Hf8PxSJOMfw)
-- [Public slack channel] join channel #falco (https://slack.sysdig.com/)
+- [Public slack channel](https://slack.sysdig.com/), join channel #falco 
