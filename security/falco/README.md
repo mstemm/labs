@@ -59,9 +59,9 @@ there is also a convenient scripted install:
    DKMS: install completed.
    ```
    
-You have probably noticed that the installer will pull the kernel headers, build and install a kernel module. This module is in charge of collecting Linux syscalls and other low-level events to the user-level tool, using this mechanism you don't need to modify or instrument the monitored containers in any way.
+You have probably noticed that the installer will pull the kernel headers, build and install a kernel module. This module is in charge of collecting Linux syscalls and other low-level events that will be exposed to the user-level tool, using this mechanism you don't need to modify or instrument the monitored containers in any way.
 
-You can also install Falco as a container itself!
+Other option is to install Falco as a container itself!
 
    ```
    docker pull sysdig/falco
@@ -69,7 +69,7 @@ You can also install Falco as a container itself!
    ```
 
 This privileged container will build and inject the kernel module, assuming that Linux kernel headers are installed and available under `lib/modules`.
-If you choose the scripted install, the Falco configuration and service reloads will be executed from the Docker host, if you prefer the Docker container, you will need to login and launch from there.
+If you choose the scripted install, the Falco configuration and service reloads will be executed from the Docker host, if you prefer the Docker container method, you will need to login and launch from there.
 
 Start the Falco service
 
@@ -347,11 +347,11 @@ Starting off from kernel system calls, events and Linux namespace context, you c
 alerts without ever having to modify or instrument the Docker image, preserving their immutable and encapsulated
 design.
 
-Note that you have been using a simple file output for this lab, but you can also [run a process](https://github.com/draios/falco/wiki/Falco-Configuration)
+You have used simple file output in order to focus on the rule syntax during this lab, but you can 
+also [configure a custom program output](https://github.com/draios/falco/wiki/Falco-Alerts#program-output)
 to get proper notifications.
 
-Reading the default rules file you will be see examples of rules slightly more complex than the ones used in this lab,
-process trying to access unauthorized device, process or user running system administration binaries, etc.
+Reading the default rules file you will see examples of more complex rules than the ones used in this lab.
 
 Further reading:
 
