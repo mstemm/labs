@@ -70,7 +70,7 @@ Other option is to install Falco as a container itself!
    ```
 
 This privileged container will build and inject the kernel module, assuming that Linux kernel headers are installed and available under `lib/modules`.
-If you choose the scripted install, the Falco configuration and service reloads will be executed from the Docker host, if you prefer the Docker container method, you will need to login and launch from there.
+If you choose the scripted install, the Falco configuration and service reloads will be executed from the Docker host, if you prefer the Docker container method, you will need to login and launch from there. The scripted install is recommended for this lab to simplify the setup. 
 
 Start the Falco service
 
