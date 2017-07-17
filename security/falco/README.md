@@ -330,9 +330,20 @@ Your shell wrote to `/dev/tty`, and the non allowed file write to `/usr`.
 
 # Conclusions & Further reading
 
-Output to program, notification
-- [Process tries to access unauthorized device](#device)
-- [Running system administration binaries](#sysadm)
+In this lab you learned the basic of Sysdig Falco and its application in the Docker-based deployments.
+Starting off from kernel system calls, events and Linux namespace context, you can configure the relevant
+alerts without ever having to modify or instrument the Docker image, preserving their immutable and encapsulated
+design.
 
+Note that you have been using a simple file output for this lab, but you can also [run a process](https://github.com/draios/falco/wiki/Falco-Configuration)
+to get proper notifications.
 
+Reading the default rules file you will be see examples of rules slightly more complex than the ones used in this lab,
+process trying to access unauthorized device, process or user running system administration binaries, etc.
 
+Further reading:
+
+- [Sysdig Falco documentation](https://github.com/draios/falco/wiki)
+- Blogpost [SELinux, Seccomp, Sysdig Falco, and you: A technical discussion](https://sysdig.com/blog/selinux-seccomp-falco-technical-discussion/)
+- Demo video [Sysdig Falco - Man in the middle attack detection](https://www.youtube.com/watch?v=Hf8PxSJOMfw)
+- [Public slack channel] join channel #falco (https://slack.sysdig.com/)
