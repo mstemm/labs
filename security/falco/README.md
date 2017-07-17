@@ -14,6 +14,7 @@ You will simulate the following security threats as part of this lab:
 - [Unauthorized process](#process)
 - [Unauthorized port open](#port)
 - [Write to non user-data directory](#write)
+- [Process attempts to read sensitive information after startup](#sensitive)
 
 
 You will play both the attacker and defender (sysadmin) roles, verifying that the intrusion attempt has
@@ -334,11 +335,70 @@ Again, two relevant log lines:
    ```
    21:15:01.998703651: Error Writing to non user_data dir (user=root command=bash  file=/dev/tty)
    21:15:58.476945006: Error Writing to non user_data dir (user=root command=touch /usr/foo file=/usr/foo)
-
    ```
 
 Your shell wrote to `/dev/tty`, and the non allowed file write to `/usr`.
 
+# <a name="sensitive"></a> Process attempts to read sensitive information after startup
+
+This is a rule already included in the default rule set, you will just adjust it to your use case.
+
+This is the original rule
+
+   ```
+   - rule: Read sensitive file trusted after startup
+     desc: an attempt to read any sensitive file (e.g. files containing user/password/authentication information) by a trusted program after startup. Trusted programs might read these files at startup to load initial state, but not afterwards.
+     condition: sensitive_files and open_read and server_procs and not proc_is_new and proc.name!="sshd"
+     output: "Sensitive file opened for reading by trusted program after startup (user=%user.name command=%proc.cmdline file=%fd.name)"
+     priority: WARNING
+    tags: [filesystem]
+   ```
+
+You haven't used the `tags` key before on your custom rules. Using tags you can
+arbitrarily group sets of rules and run Falco with the `-T <tag>` to disable a set
+of rules, or `-t <tag>` to *only* run the rules from the selected tag.
+
+Let's focus on two of the macros from the former rule
+
+`sensitive_files`
+
+   ```
+   - macro: sensitive_files
+     condition: fd.name startswith /etc and (fd.name in (/etc/shadow, /etc/sudoers, /etc/pam.conf) or fd.directory in (/etc/sudoers.d, /etc/pam.d)) 
+   ```
+
+These are the files or directories that you consider sensitive. You can add
+
+   ```
+   or fd.name startswith /dev
+   ```
+   
+In case the malicious software / users try to read from raw devices.
+
+`server_procs`
+
+   ```
+   - macro: server_procs
+    condition: proc.name in (http_server_binaries, db_server_binaries, docker_binaries, sshd)
+   ```
+
+These are the binaries considered safe that should always be allowed to read sensitive files and directories. Note that
+you can include macros to define new macros.
+
+You can now reload Falco and create a new disposable nginx container
+
+   ```
+   # systemctl restart falco
+   # docker run -d -P --name example5 nginx
+   # docker exec -it example5 bash
+   # cat /etc/shadow
+   ```
+
+Checking the log, you can read the lines
+
+   ```
+   21:41:32.181638659: Warning Sensitive file opened for reading by non-trusted program (user=root name=cat command=cat /etc/shadow file=/etc/shadow)
+   ```
 
 # Conclusions & Further reading
 
