@@ -86,7 +86,7 @@ And check that the module is correctly loaded
    ```
 
 There are also two configuration files that you will need to modify: `/etc/falco.yaml` and `/etc/falco_rules.yaml`.
-As you can guess, *falco.yaml* covers the daemon configuration and *falco_rules.yaml* the threat detection patters.
+As you can guess, *falco.yaml* covers the daemon configuration and *falco_rules.yaml* the threat detection patterns.
 
 By default, Falco only logs to *syslog*, let's edit it to enable file output, this way the exercises will be easier to follow.
 
@@ -108,7 +108,7 @@ If you have not already, clone the lab and `cd` into the lab's `examplefiles` di
 
 There you will find the complete `falco.yaml` file and a (solution) `falco_rules.yaml` file.
 
-Reload the Falco daemon every time that you change the configuration files
+Reload the Falco daemon every time that you modify the configuration files
 
    ```
    # systemctl restart falco
@@ -116,8 +116,8 @@ Reload the Falco daemon every time that you change the configuration files
 
 # <a name="shell"></a> Container running an interactive shell
 
-Let's start with an easy one, detecting an attacker running an interactive shell in any of our containers. This alert is included
-in the default rule set. Let's trigger it first and then you can dissect the rule itself.
+Let's start with an easy one, detecting an attacker running an interactive shell in any of your containers. This alert is included
+in the default rule set. Let's trigger it first and then you can study the rule itself.
 
 Run any container on your Docker host, for example `nginx`:
 
@@ -154,7 +154,7 @@ This is the specific `/etc/falco_rules.yaml` rule that fired
      tags: [container, shell]
    ```
 
-This is a rather complex rule, don't worry if you don't fully understand it at this moment.
+This is a rather complex rule, don't worry if you don't fully understand every section at this moment.
 
 Notice that you can define and use macros to make your rules more readable and powerful. For example the `and container` condition above corresponds to the macro
 
@@ -167,39 +167,39 @@ This is, any container id that doesn't match the hosting node (any actual contai
 
 You can also classify different threat priorities [DEBUG, INFO, NOTICE, WARNING, ERROR...]
 
-Note as well that the output can be completed with the context variables provided by Falco like `%proc.name` or `%container.info`.
+Note as well that the output message will be much more useful including the context variables provided by Falco like `%proc.name` or `%container.info`.
 
 For the next exercise, you will create your own custom rule from scratch.
 
 # <a name="process"></a> Unauthorized process
 
-Docker and microservices design patterns instruct us to minimize the number of processes per container. Apart from the architectural benefits, this
-could be a huge advantage to security, because it restricts what should and should not be running on a particular container. 
+Docker and microservices design patterns recommend minimizing the number of processes per container. Apart from the architectural benefits, this
+could be a huge advantage to security, because it completely restricts what should and should not be running on a particular container. 
 
-You know that your `nginx`containers should only be executing the `nginx` process (or a reduced set of processes in more realistic scenarios). Anything else
-should rise an alarm.
+You know that your `nginx`containers should only be executing the `nginx` process (or a reduced set of processes in more complex scenarios). Anything else
+should fire an alarm.
 
 Let's write the following rule into `/etc/falco_rules.yaml`
 
    ```
    #Our nginx containers for example1 should only be running the 'nginx' process
    - rule: Unauthorized process on nginx containers
-     desc: There is a process in our nginx container that is not described in the template
-     condition: spawned_process and container and container.image startswith nginx and `
+     desc: There is a process running in the nginx container that is not described in the template
+     condition: spawned_process and container and container.image startswith nginx and not proc.name in (nginx)
      output: Unauthorized process (%proc.cmdline) running in (%container.id)
      priority: WARNING
    ```
 
-You have the `rule` name and `desc` for the human reader.
+You need to provide the `rule` name and `desc` entries for the human reader.
 The firing condition requires:
  - `spawned_process` (default macro) 
  - `container` (you don't want to fire this for the host)
- - `container.image startswith nginx` (so you can have separate authorized process lists for separate containers) 
+ - `container.image startswith nginx` (so you can have separate authorized process lists for each container image) 
  - `not proc.name in (nginx)` (you can write a comma separated list with the expected processes)
 
 You already know how `output` and `priority` works.
 
-Again, restart Falco, create the nginx container.
+Again, restart Falco and create the nginx container.
 
    ```
    # systemctl restart falco
@@ -215,16 +215,16 @@ Tailing the `/var/log/falco_events.txt` you will be able to read:
    18:38:43.364877988: Warning Unauthorized process (ls ) running in (604aa46610dd)
    ```
 
-Success! The first notice entry, you were already expecting by the rule in the exercise above, second entry shows that Falco has recognized an alien process and is firing a warning.
+Success! The first notice entry, you were already expecting by the rule in the exercise above, second entry shows that Falco has recognized an unexpected process and is firing a warning.
 
 You should probably comment out this rule before proceeding to the next exercises to get a cleaner output.
 
 # <a name="port"></a> Unauthorized port
 
-Similar to the previous exercise, if your container is opening a port that does not correlate to its service template, that's
+Similar to the previous exercise, if your container is opening a port that does not correlate to its service template, that's probably
 something that should be checked.
 
-this time, you can create a macro that contains your regular port numbers, so the rules you create later are shorter and easier to read:
+this time, you can create a macro that contains your expected port numbers, so the rules you create later are shorter and easier to read:
 
    ```
    - macro: nginx_ports
@@ -232,7 +232,7 @@ this time, you can create a macro that contains your regular port numbers, so th
 
    ```
 
-Now you write a rule that uses this macro like this:
+Now, write a rule that uses the macro
 
    ```
    - rule: Unauthorized port
@@ -281,7 +281,7 @@ If you tail the `/var/log/falco_events.txt` you will see two interesting entries
    19:50:51.031989661: Warning Unauthorized port (0.0.0.0:85) running in (example3 (id=6227a98c2d0b))
    ```
 
-First one corresponds to a default Falco rule, usually you don't want a process to write in `/etc/`, second one is your custom rule.
+First one corresponds to a default Falco rule, usually you don't want a process to write in `/etc/`, second one is the custom rule you just created.
 
 
 # <a name="write"></a> Write to non user-data directory
@@ -316,7 +316,7 @@ Let's take a look at the `open_write` macro:
    condition: (evt.type=open or evt.type=openat) and evt.is_open_write=true and fd.typechar='f'
    ```
 
-Just as a reminder that at its core, Falco works doing a live capture of system calls like `open` or `openat`.
+Just as a reminder that at its core, Falco performs a live capture of system calls like `open` or `openat`.
 
 Now, you can spawn a new container and try this rule:
 
@@ -343,15 +343,13 @@ Your shell wrote to `/dev/tty`, and the non allowed file write to `/usr`.
 # Conclusions & Further reading
 
 In this lab you learned the basic of Sysdig Falco and its application in the Docker-based deployments.
-Starting off from kernel system calls, events and Linux namespace context, you can configure the relevant
-alerts without ever having to modify or instrument the Docker image, preserving their immutable and encapsulated
+Starting off from kernel system calls, events and Linux namespace context metadata, you can configure the relevant
+alerts without ever having to modify or instrument the Docker images, preserving their immutable and encapsulated
 design.
 
 You have used simple file output in order to focus on the rule syntax during this lab, but you can 
 also [configure a custom program output](https://github.com/draios/falco/wiki/Falco-Alerts#program-output)
 to get proper notifications.
-
-Reading the default rules file you will see examples of more complex rules than the ones used in this lab.
 
 Further reading:
 
