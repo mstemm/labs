@@ -2,9 +2,9 @@
 
 > **Difficulty**: Medium
 
-> **Time**: Approximately 40 minutes
+> **Time**: Approximately 50 minutes
 
-Sysdig Falco is an open source, behavioral monitor designed to detect anomalous activity. Suitable for deploying intrusion detection targeting any generic Linux host, it is particularly useful for Docker hosting nodes since it supports container-specific context like **container.id** or **namespaces** for its rules. 
+Sysdig Falco is an open source, behavioral monitor designed to detect anomalous activity. Suitable for deploying intrusion detection targeting any generic Linux host, it is particularly useful for Docker hosting nodes since it supports container-specific context like **container.id** or **namespaces** for its rules.
 
 In this lab you will learn the basics of Sysdig Falco and how to use it along with Docker to detect anomalous container behavior.
 
@@ -15,7 +15,7 @@ You will simulate the following security threats as part of this lab:
 - [Unauthorized port open](#port)
 - [Write to non user-data directory](#write)
 - [Process attempts to read sensitive information after startup](#sensitive)
-
+- [Sensitive mount by container](#mount)
 
 You will play both the attacker and defender (sysadmin) roles, verifying that the intrusion attempt has
 been detected by Sysdig Falco.
@@ -32,53 +32,41 @@ and Docker should suffice.
 
 # Falco installation and configuration
 
-Sysdig Falco can be installed as a regular package from the repositories of popular distributions like Ubuntu or RHEL, but
-there is also a convenient scripted install:
+Sysdig Falco can be installed as a regular package from the repositories of popular distributions like Ubuntu or RHEL, there is also an [installation script](https://github.com/draios/falco/wiki/How-to-Install-Falco-for-Linux) that will auto detect your distro and install the required kernel headers.
+
+For this lab, you will install using another method: a privileged Falco Docker container. It's cleaner for your Docker host node and easier to integrate into real production deployments.
+
+Create a directory in your Docker host and download the configuration files that you will mount in the container
 
    ```
-   $ curl -s https://s3.amazonaws.com/download.draios.com/stable/install-falco | sudo bash
-   Detecting operating system
-   Detecting operating system
-   Installing Sysdig public key
-   OK
-   Installing falco repository
-   Installing kernel headers
-   Installing falco
-
-   ...
-   
-
-   falco-probe:
-   Running module version sanity check.
-    - Original module
-      - No original module exists within this kernel
-    - Installation
-      - Installing to /lib/modules/4.4.0-83-generic/updates/dkms/
-
-   depmod....
-
-   DKMS: install completed.
+   # mkdir /etc/falco
+   # cd /etc/falco
+   # wget https://raw.githubusercontent.com/draios/falco/dev/rules/falco_rules.yaml
+   # wget https://raw.githubusercontent.com/draios/falco/dev/falco.yaml
+   # touch /var/log/falco_events.log
    ```
-   
-You have probably noticed that the installer will pull the kernel headers, build and install a kernel module. This module is in charge of collecting Linux syscalls and other low-level events that will be exposed to the user-level tool, using this mechanism you don't need to modify or instrument the monitored containers in any way.
+These are the two configuration files that you will need to modify in the examples below.
+As you can guess, `falco.yaml` covers the daemon configuration, `falco_rules.yaml` contains the threat detection patterns and `falco_events.log` will be used as default output file.
 
-Other option is to install Falco as a container itself!
+The Falco container will build and inject a kernel module. This module is in charge of collecting Linux syscalls and other low-level events that will be exposed to the user-level tool, using this mechanism you don't need to modify or instrument the monitored containers in any way. Make sure that the appropriate kernel headers are installed and available under `lib/modules`.
+
+Ubuntu/Debian instructions:
+
+   ```
+   # apt-get install linux-headers-$(uname -r)
+   ```
+If you use any other distro, check how to install the kernel headers.
+
+You can now pull and launch the Falco container
 
    ```
    docker pull sysdig/falco
-   docker run -i -t --name falco --privileged -v /var/run/docker.sock:/host/var/run/docker.sock -v /dev:/host/dev -v /proc:/host/proc:ro -v /boot:/host/boot:ro -v /lib/modules:/host/lib/modules:ro -v /usr:/host/usr:ro sysdig/falco
+   docker run -i -t --name falco --privileged -v /var/run/docker.sock:/host/var/run/docker.sock -v /dev:/host/dev -v /proc:/host/proc:ro -v /boot:/host/boot:ro -v /lib/modules:/host/lib/modules:ro -v /usr:/host/usr:ro -v /etc/falco/falco.yaml:/etc/falco.yaml -v /etc/falco/falco_rules.yaml:/etc/falco_rules.yaml -v /var/log/falco_events.log:/var/log/falco_events.log sysdig/falco
    ```
 
-This privileged container will build and inject the kernel module, assuming that Linux kernel headers are installed and available under `lib/modules`.
-If you choose the scripted install, the Falco configuration and service reloads will be executed from the Docker host, if you prefer the Docker container method, you will need to login and launch from there. The scripted install is recommended for this lab to simplify the setup. 
+If you accidentally terminate the container or want to reload the configuration files, you can always `docker restart falco` from the host.
 
-Start the Falco service
-
-   ```
-   # systemctl start falco
-   ```
-
-And check that the module is correctly loaded
+Check that the kernel module is correctly loaded
 
    ```
    # lsmod | grep falco
@@ -86,19 +74,20 @@ And check that the module is correctly loaded
      falco_probe           442368  1
    ```
 
-There are also two configuration files that you will need to modify: `/etc/falco.yaml` and `/etc/falco_rules.yaml`.
-As you can guess, *falco.yaml* covers the daemon configuration and *falco_rules.yaml* the threat detection patterns.
+By default, Falco only logs to *syslog*, let's disable this option and enable file output, this way the exercises will be easier to follow.
 
-By default, Falco only logs to *syslog*, let's edit it to enable file output, this way the exercises will be easier to follow.
-
-
-Edit the *falco.yaml* file and modify the `file_output` section:
+Edit the `/etc/falco/falco.yaml` file and modify the `syslog_output` and `file_output` section:
 
    ```
+   syslog_output:
+     enabled: false
+
    file_output:
      enabled: true
-     filename: /var/log/falco_events.txt
+     filename: /var/log/falco_events.log
    ```
+
+Save the file and reload the container.
 
 If you have not already, clone the lab and `cd` into the lab's `examplefiles` directory.
 
@@ -109,12 +98,6 @@ If you have not already, clone the lab and `cd` into the lab's `examplefiles` di
 
 There you will find the complete `falco.yaml` file and a (solution) `falco_rules.yaml` file.
 
-Reload the Falco daemon every time that you modify the configuration files
-
-   ```
-   # systemctl restart falco
-   ```
-
 # <a name="shell"></a> Container running an interactive shell
 
 Let's start with an easy one, detecting an attacker running an interactive shell in any of your containers. This alert is included
@@ -124,19 +107,19 @@ Run any container on your Docker host, for example `nginx`:
 
    ```
    # docker run -d -P --name example1 nginx
- 
+
    # docker ps
    CONTAINER ID        IMAGE               COMMAND                  CREATED             STATUS              PORTS                   NAMES
    604aa46610dd        nginx               "nginx -g 'daemon ..."   2 minutes ago       Up 2 minutes        0.0.0.0:32771->80/tcp   example1
    ```
 
-Now spawn an interactive shell 
+Now spawn an interactive shell
 
    ```
    # docker exec -it example1 bash
    ```
 
-Tailing the `/var/log/falco_events.txt` file you will be able to read:
+Tailing the `/var/log/falco_events.log` file you will be able to read:
 
    ```
    17:13:24.357351845: Notice A shell was spawned in a container with an attached terminal (user=root example1 (id=604aa46610dd) shell=bash parent=<NA> cmdline=bash  terminal=34816)
@@ -168,14 +151,34 @@ This is, any container id that doesn't match the hosting node (any actual contai
 
 You can also classify different threat priorities [DEBUG, INFO, NOTICE, WARNING, ERROR...]
 
-Note as well that the output message will be much more useful including the context variables provided by Falco like `%proc.name` or `%container.info`.
+Note as well that the output message is much more useful including the context variables provided by Falco like `%proc.name` or `%container.info`.
+
+But what if an untrusted process tries to directly spawn a shell inside our container namespace?  
+
+There is a rule for that as well (search for `rule: Run shell untrusted` in the Falco rules file).
+
+From the docker host, let's spawn a shell directly in the `example1` container namespace
+
+   ```
+   #  docker inspect --format '{{.State.Pid}}' example1
+   1768               # Your specific pid number will vary
+   # nsenter --target 1768 --mount --uts --ipc --net --pid
+   root@432436a38227:/# whoami
+   root
+   ```
+
+Tailing the log, you can verify that this action has been detected by Falco
+
+   ```
+   13:01:26.610774404: Debug Shell spawned by untrusted binary (user=root shell=bash parent=nsenter cmdline=bash  pcmdline=nsenter --target 1768 --mount --uts --ipc --net --pid)
+   ```
 
 For the next exercise, you will create your own custom rule from scratch.
 
 # <a name="process"></a> Unauthorized process
 
 Docker and microservices design patterns recommend minimizing the number of processes per container. Apart from the architectural benefits, this
-could be a huge advantage to security, because it completely restricts what should and should not be running on a particular container. 
+could be a huge advantage to security, because it completely restricts what should and should not be running on a particular container.
 
 You know that your `nginx`containers should only be executing the `nginx` process (or a reduced set of processes in more complex scenarios). Anything else
 should fire an alarm.
@@ -193,9 +196,9 @@ Let's write the following rule into `/etc/falco_rules.yaml`
 
 You need to provide the `rule` name and `desc` entries for the human reader.
 The firing condition requires:
- - `spawned_process` (default macro) 
+ - `spawned_process` (default macro)
  - `container` (you don't want to fire this for the host)
- - `container.image startswith nginx` (so you can have separate authorized process lists for each container image) 
+ - `container.image startswith nginx` (so you can have separate authorized process lists for each container image)
  - `not proc.name in (nginx)` (you can write a comma separated list with the expected processes)
 
 You already know how `output` and `priority` works.
@@ -203,13 +206,13 @@ You already know how `output` and `priority` works.
 Again, restart Falco and create the nginx container.
 
    ```
-   # systemctl restart falco
+   # docker restart falco
    # docker run -d -P --name example2 nginx
    ```
 
 spawn a shell in the `example2` container and just run anything like `ls`
 
-Tailing the `/var/log/falco_events.txt` you will be able to read:
+Tailing the `/var/log/falco_events.log` you will be able to read:
 
    ```
    18:38:36.911250971: Notice A shell was spawned in a container with an attached terminal (user=root example1 (id=604aa46610dd) shell=bash parent=<NA> cmdline=bash  terminal=34816)
@@ -246,7 +249,7 @@ Now, write a rule that uses the macro
 Let's reload Falco and create a disposable nginx container
 
    ```
-   # systemctl restart falco
+   # docker restart falco
    # docker run -d -P --name example3 nginx
    ```
 
@@ -264,7 +267,7 @@ Edit the nginx configuration file
 
    ```
    # vim /etc/nginx/conf.d/default.conf
-   
+
    ```
 
 you will see the directive `listen 80`, change it to a non authorized port, `listen 85` for example. Save the file and exit.
@@ -275,7 +278,7 @@ Reload the nginx service
    # service nginx reload
    ```
 
-If you tail the `/var/log/falco_events.txt` you will see two interesting entries:
+If you tail the `/var/log/falco_events.log` you will see two interesting entries:
 
    ```
    19:50:33.663139720: Error File below /etc opened for writing (user=root command=vim /etc/nginx/conf.d/default.conf file=/etc/nginx/conf.d/default.conf)
@@ -322,12 +325,12 @@ Just as a reminder that at its core, Falco performs a live capture of system cal
 Now, you can spawn a new container and try this rule:
 
    ```
-   # systemctl restart falco
+   # docker restart falco
    # docker run -d -P --name example4 nginx
    # docker exec -it example4 bash
    # mkdir /userdata
    # touch /userdata/foo   # Shouldn't trigger this rule
-   # touch /usr/foo 
+   # touch /usr/foo
    ```
 
 Again, two relevant log lines:
@@ -364,7 +367,7 @@ Let's focus on two of the macros from the former rule
 
    ```
    - macro: sensitive_files
-     condition: fd.name startswith /etc and (fd.name in (/etc/shadow, /etc/sudoers, /etc/pam.conf) or fd.directory in (/etc/sudoers.d, /etc/pam.d)) 
+     condition: fd.name startswith /etc and (fd.name in (/etc/shadow, /etc/sudoers, /etc/pam.conf) or fd.directory in (/etc/sudoers.d, /etc/pam.d))
    ```
 
 These are the files or directories that you consider sensitive. You can add
@@ -372,7 +375,7 @@ These are the files or directories that you consider sensitive. You can add
    ```
    or fd.name startswith /dev
    ```
-   
+
 In case the malicious software / users try to read from raw devices.
 
 `server_procs`
@@ -388,7 +391,7 @@ you can include macros to define new macros.
 You can now reload Falco and create a new disposable nginx container
 
    ```
-   # systemctl restart falco
+   # docker restart falco
    # docker run -d -P --name example5 nginx
    # docker exec -it example5 bash
    # cat /etc/shadow
@@ -400,6 +403,39 @@ Checking the log, you can read the lines
    21:41:32.181638659: Warning Sensitive file opened for reading by non-trusted program (user=root name=cat command=cat /etc/shadow file=/etc/shadow)
    ```
 
+# <a name="mount"></a> Sensitive mount by container
+
+Docker containers usually have a strictly defined and static set of mountpoints, let's also use
+this design limitation to your advantage. If a container tries to mount a host directory / file that
+is outside the allowed directory set, that looks suspicious.   
+
+You have this rule already in the default rules file:
+
+   ```
+   - rule: Launch Sensitive Mount Container
+     desc: >
+       Detect the initial process started by a container that has a mount from a sensitive host directory
+       (i.e. /proc). Exceptions are made for known trusted images.
+     condition: evt.type=execve and proc.vpid=1 and container and sensitive_mount and not trusted_containers
+     output: Container with sensitive mount started (user=%user.name command=%proc.cmdline %container.info)
+     priority: INFO
+     tags: [container, cis]
+   ```
+
+Of course, you can modify the macro `sensitive_mount` to include the *forbidden* directories relevant to your case.
+
+Launch an offending container
+
+    ```
+    # docker run -d -P --name example6 -v /proc:/tmp/proc nginx
+    ```
+And you will be able to read the log line
+
+   ```
+   13:32:41.070491862: Informational Container with sensitive mount started (user=root command=nginx -g daemon off; example6 (id=c46fa3bf0651))
+   ```
+
+
 # Conclusions & Further reading
 
 In this lab you learned the basic of Sysdig Falco and its application in the Docker-based deployments.
@@ -407,7 +443,30 @@ Starting off from kernel system calls, events and Linux namespace context metada
 alerts without ever having to modify or instrument the Docker images, preserving their immutable and encapsulated
 design.
 
-You have used simple file output in order to focus on the rule syntax during this lab, but you can 
+Just reading the default Falco rules file, you can find a lot of more advanced examples, like this one
+
+   ```
+   - rule: Change thread namespace
+     desc: >
+       an attempt to change a program/thread\'s namespace (commonly done
+       as a part of creating a container) by calling setns.
+     condition: >
+       evt.type = setns
+       and not proc.name in (docker_binaries, k8s_binaries, lxd_binaries, sysdigcloud_binaries, sysdig, nsenter)
+       and not proc.name startswith "runc:"
+       and not proc.pname in (sysdigcloud_binaries)
+       and not java_running_sdjagent
+     output: >
+       Namespace change (setns) by unexpected program (user=%user.name command=%proc.cmdline
+       parent=%proc.pname %container.info)
+     priority: NOTICE
+     tags: [process]
+   ```
+
+Which is particularly interesting since it is able to detect an unexpected `setns` system call, which can be used
+to change the namespace of a running thread (and thus, to jailbreak docker process encapsulation).
+
+You have used simple file output in order to focus on the rule syntax during this lab, but you can
 also [configure a custom program output](https://github.com/draios/falco/wiki/Falco-Alerts#program-output)
 to get proper notifications.
 
@@ -416,4 +475,4 @@ Further reading:
 - [Sysdig Falco documentation](https://github.com/draios/falco/wiki)
 - Blogpost [SELinux, Seccomp, Sysdig Falco, and you: A technical discussion](https://sysdig.com/blog/selinux-seccomp-falco-technical-discussion/)
 - Demo video [Sysdig Falco - Man in the middle attack detection](https://www.youtube.com/watch?v=Hf8PxSJOMfw)
-- [Public slack channel](https://slack.sysdig.com/), join channel #falco 
+- [Public slack channel](https://slack.sysdig.com/), join channel #falco

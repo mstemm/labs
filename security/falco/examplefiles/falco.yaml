@@ -35,11 +35,11 @@ outputs:
 # Multiple outputs can be enabled.
 
 syslog_output:
-  enabled: true
+  enabled: false
 
 file_output:
   enabled: true
-  filename: /var/log/falco_events.txt
+  filename: /var/log/falco_events.log
 
 stdout_output:
   enabled: true
