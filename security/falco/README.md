@@ -30,8 +30,7 @@ You will need all of the following to complete this lab:
 - A Linux-based Docker Host.
 - Some disposable containers to simulate the attacks.
 
-To generate this lab `Ubuntu 16.04.2 LTS` and `Docker 17.06.0-ce` were used. Any current version of the Linux kernel
-and Docker should suffice.
+To generate this lab `Ubuntu 16.04.2 LTS` and `Docker 17.06.0-ce` were used. Any current version of the Linux kernel with the kernel headers available and a fairly modern Docker version should suffice.
 
 # Falco installation and configuration
 
