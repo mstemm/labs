@@ -6,6 +6,9 @@
 
 Sysdig Falco is an open source, behavioral monitor designed to detect anomalous activity. Suitable for deploying intrusion detection targeting any generic Linux host, it is particularly useful for Docker hosting nodes since it supports container-specific context like **container.id** or **namespaces** for its rules.
 
+Sysdig Falco is an *auditing* tool as opposed to *enforcement* tools like
+[Seccomp](https://github.com/docker/labs/blob/master/security/seccomp/README.md) or [AppArmor](https://github.com/docker/labs/blob/master/security/apparmor/README.md). Falco runs in user space, using a kernel module to obtain system calls, while other similar tools perform system call filtering/monitoring at the kernel level. This [article](https://sysdig.com/blog/selinux-seccomp-falco-technical-discussion/) discusses the similarities and differences of these related security tools.
+
 In this lab you will learn the basics of Sysdig Falco and how to use it along with Docker to detect anomalous container behavior.
 
 You will simulate the following security threats as part of this lab:
