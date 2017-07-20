@@ -159,7 +159,7 @@ But what if an untrusted process tries to directly spawn a shell inside our cont
 
 There is a rule for that as well (search for `rule: Run shell untrusted` in the Falco rules file).
 
-From the docker host, let's spawn a shell directly in the `example1` container namespace
+From the Docker host, let's spawn a shell directly in the `example1` container namespace
 
    ```
    #  docker inspect --format '{{.State.Pid}}' example1
