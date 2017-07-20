@@ -376,7 +376,7 @@ These are the files or directories that you consider sensitive. You can add
    or fd.name startswith /dev
    ```
 
-In case the malicious software / users try to read from raw devices.
+In case the malicious software / users tries to read from raw devices.
 
 `server_procs`
 
@@ -429,6 +429,7 @@ Launch an offending container
     ```
     # docker run -d -P --name example6 -v /proc:/tmp/proc nginx
     ```
+
 And you will be able to read the log line
 
    ```
