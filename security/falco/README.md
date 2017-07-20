@@ -1,13 +1,13 @@
-# Lab: Falco IDS
+# Lab: Sysdig Falco, Docker Security Auditing
 
 > **Difficulty**: Medium
 
 > **Time**: Approximately 50 minutes
 
-Sysdig Falco is an open source, behavioral monitor designed to detect anomalous activity. Suitable for deploying intrusion detection targeting any generic Linux host, it is particularly useful for Docker hosting nodes since it supports container-specific context like **container.id** or **namespaces** for its rules.
+Sysdig Falco is an open source, behavioral monitoring software designed to detect anomalous activity. Sysdig Falco works as a intrusion detection system on any Linux host, although it is particularly useful when using Docker since it supports container-specific context like **container.id**, **container.image** or **namespaces** for its rules.
 
 Sysdig Falco is an *auditing* tool as opposed to *enforcement* tools like
-[Seccomp](https://github.com/docker/labs/blob/master/security/seccomp/README.md) or [AppArmor](https://github.com/docker/labs/blob/master/security/apparmor/README.md). Falco runs in user space, using a kernel module to obtain system calls, while other similar tools perform system call filtering/monitoring at the kernel level. This [article](https://sysdig.com/blog/selinux-seccomp-falco-technical-discussion/) discusses the similarities and differences of these related security tools.
+[Seccomp](https://github.com/docker/labs/blob/master/security/seccomp/README.md) or [AppArmor](https://github.com/docker/labs/blob/master/security/apparmor/README.md). Falco runs in user space, using a kernel module to intercept system calls, while other similar tools perform system call filtering/monitoring at the kernel level. One of the benefits of a user space implementation is being able to integrate with external systems like Docker orchestration tools. [SELinux, Seccomp, Sysdig Falco, and you: A technical discussion](https://sysdig.com/blog/selinux-seccomp-falco-technical-discussion/) discusses the similarities and differences of these related security tools.
 
 In this lab you will learn the basics of Sysdig Falco and how to use it along with Docker to detect anomalous container behavior.
 
