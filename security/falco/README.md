@@ -50,14 +50,14 @@ Create a directory in your Docker host and download the configuration files that
 These are the two configuration files that you will need to modify in the examples below.
 As you can guess, `falco.yaml` covers the daemon configuration, `falco_rules.yaml` contains the threat detection patterns and `falco_events.log` will be used as default output file.
 
-The Falco container will build and inject a kernel module. This module is in charge of collecting Linux syscalls and other low-level events that will be exposed to the user-level tool, using this mechanism you don't need to modify or instrument the monitored containers in any way. Make sure that the appropriate kernel headers are installed and available under `lib/modules`.
+The Falco container will build using DKMS and load a kernel module, that's why Falco will run as a privileged container. This module is in charge of capturing Linux syscalls and other low-level events that will be exposed to the user-level process. Using this mechanism you don't need to modify or instrument the monitored containers in any way. Make sure that the appropriate kernel headers are installed and available under `lib/modules`.
 
 Ubuntu/Debian instructions:
 
    ```
    # apt-get install linux-headers-$(uname -r)
    ```
-If you use any other distro, check how to install the kernel headers.
+Fedora/CentOS users will install the `kernel-devel-$(uname -r)` package and if you use any other distro, check how to install the kernel headers.
 
 You can now pull and launch the Falco container
 
