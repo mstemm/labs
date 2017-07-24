@@ -30,7 +30,7 @@ You will need all of the following to complete this lab:
 - A Linux-based Docker Host.
 - Some disposable containers to simulate the attacks.
 
-To generate this lab `Ubuntu 16.04.2 LTS` and `Docker 17.06.0-ce` were used. Any current version of the Linux kernel with the kernel headers available and a fairly modern Docker version should suffice.
+To generate this lab `Ubuntu 16.04.2 LTS`, `Docker 17.06.0-ce`, and `Falco 0.7.0` were used. Any current version of the Linux kernel with the kernel headers available and a fairly modern Docker version should suffice.
 
 # Falco installation and configuration
 
@@ -38,7 +38,7 @@ Sysdig Falco can be installed as a regular package from the repositories of popu
 
 For this lab, you will install using another method: a privileged Falco Docker container. It's cleaner for your Docker host node and easier to integrate into real production deployments.
 
-Create a directory in your Docker host and download the configuration files that you will mount in the container
+As root, create a directory in your Docker host and download the configuration files that you will mount in the container
 
    ```
    # mkdir /etc/falco
@@ -50,7 +50,7 @@ Create a directory in your Docker host and download the configuration files that
 These are the two configuration files that you will need to modify in the examples below.
 As you can guess, `falco.yaml` covers the daemon configuration, `falco_rules.yaml` contains the threat detection patterns and `falco_events.log` will be used as default output file.
 
-The Falco container will build using DKMS and load a kernel module, that's why Falco will run as a privileged container. This module is in charge of capturing Linux syscalls and other low-level events that will be exposed to the user-level process. Using this mechanism you don't need to modify or instrument the monitored containers in any way. Make sure that the appropriate kernel headers are installed and available under `lib/modules`.
+The Falco container will build and load a kernel module using DKMS. Falco will run as a privileged container in order to build and load this kernel module, as well as have full visibility into the set of processes running on the local machine. This module is in charge of capturing Linux syscalls and other low-level events that will be exposed to the user-level process. Using this mechanism you don't need to modify or instrument the monitored containers in any way. Make sure that the appropriate kernel headers are installed and available under `lib/modules`.
 
 Ubuntu/Debian instructions:
 
@@ -212,16 +212,19 @@ Again, restart Falco and create the nginx container.
    # docker run -d -P --name example2 nginx
    ```
 
-spawn a shell in the `example2` container and just run anything like `ls`
+spawn a shell in the `example2` container and just run anything like `ls`:
+
+   ```
+   # docker exec -it example2 ls
+   ```
 
 Tailing the `/var/log/falco_events.log` you will be able to read:
 
    ```
-   18:38:36.911250971: Notice A shell was spawned in a container with an attached terminal (user=root example1 (id=604aa46610dd) shell=bash parent=<NA> cmdline=bash  terminal=34816)
    18:38:43.364877988: Warning Unauthorized process (ls ) running in (604aa46610dd)
    ```
 
-Success! The first notice entry, you were already expecting by the rule in the exercise above, second entry shows that Falco has recognized an unexpected process and is firing a warning.
+Success! The falco notification shows that Falco has recognized an unexpected process and is firing a warning.
 
 You should probably comment out this rule before proceeding to the next exercises to get a cleaner output.
 
@@ -289,6 +292,7 @@ If you tail the `/var/log/falco_events.log` you will see two interesting entries
 
 First one corresponds to a default Falco rule, usually you don't want a process to write in `/etc/`, second one is the custom rule you just created.
 
+Comment out these macros and rules before moving on to the next section.
 
 # <a name="write"></a> Write to non user-data directory
 
@@ -299,7 +303,7 @@ First, let's define a macro with the write-allowed directories:
 
    ```
    - macro: user_data_dir
-     condition: evt.arg[1] startswith /userdata or evt.arg[1] startswith /var/log/nginx
+     condition: evt.arg[1] startswith /userdata or evt.arg[1] startswith /var/log/nginx or evt.arg[1] startswith /var/run/nginx
    ```
 
 You may want to include `/var/log/nginx` to avoid firing an alarm when nginx updates its logs.
@@ -368,8 +372,11 @@ Let's focus on two of the macros from the former rule
 `sensitive_files`
 
    ```
-   - macro: sensitive_files
-     condition: fd.name startswith /etc and (fd.name in (/etc/shadow, /etc/sudoers, /etc/pam.conf) or fd.directory in (/etc/sudoers.d, /etc/pam.d))
+  - macro: sensitive_files
+    condition: >
+      fd.name startswith /etc and
+      (fd.name in (/etc/shadow, /etc/sudoers, /etc/pam.conf)
+       or fd.directory in (/etc/sudoers.d, /etc/pam.d))
    ```
 
 These are the files or directories that you consider sensitive. You can add
@@ -438,6 +445,36 @@ And you will be able to read the log line
    13:32:41.070491862: Informational Container with sensitive mount started (user=root command=nginx -g daemon off; example6 (id=c46fa3bf0651))
    ```
 
+# Using `falco-event-generator` to generate synthetic events
+
+You may be wondering what other types of suspicious activity the default falco ruleset can detect. Falco has a synthetic event generator that shows off all the capibilities of the default ruleset. It can be run via a docker container:
+
+   ```
+   docker pull sysdig/falco-event-generator
+   docker run -it --name falco-event-generator sysdig/falco-event-generator
+   ```
+
+If you run the event generator along with falco + the default falco ruleset, you'll see lots of suspicious activity detected:
+
+```
+19:00:55.362191761: Error File created below /dev by untrusted program (user=root command=event_generator  file=/dev/created-by-event-generator-sh)
+19:00:56.365043165: Notice Database-related program spawned process other than itself (user=root program=sh -c ls > /dev/null parent=mysqld)
+19:00:57.367928872: Warning Sensitive file opened for reading by non-trusted program (user=root name=event_generator command=event_generator  file=/etc/shadow)
+19:00:59.370589147: Error File below known binary directory renamed/removed (user=root command=event_generator  operation=rename file=<NA> res=0 oldpath=/bin/true newpath=/bin/true.event-generator-sh )
+19:00:59.370606844: Error File below known binary directory renamed/removed (user=root command=event_generator  operation=rename file=<NA> res=0 oldpath=/bin/true.event-generator-sh newpath=/bin/true )
+19:01:00.371075563: Notice Unexpected setuid call by non-sudo, non-root program (user=bin parent=event_generator command=event_generator  uid=root)
+19:01:01.372054445: Warning Sensitive file opened for reading by non-trusted program (user=root name=event_generator command=event_generator  file=/etc/shadow)
+19:01:02.374407923: Warning Sensitive file opened for reading by non-trusted program (user=root name=httpd command=httpd --action read_sensitive_file --interval 6 --once file=/etc/shadow)
+19:01:09.375758752: Notice A shell was spawned in a container with an attached terminal (user=root falco-event-generator (id=a4f221851741) shell=sh parent=event_generator cmdline=sh -c ls > /dev/null terminal=34830)
+19:01:10.384443399: Notice Known system binary sent/received network traffic (user=root command=sha1sum --action network_activity --interval 0 --once connection=127.0.0.1:8192)
+19:01:11.386501482: Informational System user ran an interactive command (user=bin command=login )
+19:01:13.391107286: Error File below a known binary directory opened for writing (user=root command=event_generator  file=/bin/created-by-event-generator-sh)
+19:01:14.391626865: Error File below /etc opened for writing (user=root command=event_generator  file=/etc/created-by-event-generator-sh)
+19:01:15.392616291: Error Rpm database opened for writing by a non-rpm program (command=event_generator  file=/var/lib/rpm/created-by-event-generator-sh)
+...
+```
+
+This can give you a good idea of the capabilities of falco.
 
 # Conclusions & Further reading
 
